@@ -24,7 +24,7 @@ extension NSNotificationCenter {
     }
 
     public func once(name: String) -> NotificationPromise {
-        let (promise, fulfill) = NotificationPromise.go()
+        let (promise, fulfill, _) = NotificationPromise.go()
         let id = addObserverForName(name, object: nil, queue: nil, usingBlock: fulfill)
         promise.then(on: zalgo) { _ in self.removeObserver(id) }
         return promise
@@ -32,23 +32,39 @@ extension NSNotificationCenter {
 }
 
 public class NotificationPromise: Promise<[NSObject: AnyObject]> {
-    /// Hack to fix https://github.com/mxcl/PromiseKit/issues/415
-    private class NotePromise: Promise<NSNotification> {}
-
-    private let (parentPromise, parentFulfill, _) = NotePromise.pendingPromise()
+    private let (parentPromise, parentFulfill, parentReject) = Promise<NSNotification>.pendingPromise()
 
     public func asNotification() -> Promise<NSNotification> {
         return parentPromise
     }
 
-    private class func go() -> (NotificationPromise, (NSNotification) -> Void) {
+    private class func go() -> (NotificationPromise, (NSNotification) -> Void, (ErrorType) -> Void) {
         var fulfill: (([NSObject: AnyObject]) -> Void)!
-        let promise = NotificationPromise { f, _ in fulfill = f }
+        var reject: ((ErrorType) -> Void)!
+        let promise = NotificationPromise { f, r in
+            fulfill = f
+            reject = r
+        }
         promise.parentPromise.then { fulfill($0.userInfo ?? [:]) }
-        return (promise, promise.parentFulfill)
+        promise.parentPromise.error { reject($0) }
+        return (promise, promise.parentFulfill, promise.parentReject)
     }
 
     private override init(@noescape resolvers: (fulfill: ([NSObject: AnyObject]) -> Void, reject: (ErrorType) -> Void) throws -> Void) {
         super.init(resolvers: resolvers)
+    }
+}
+
+extension NSNotificationCenter {
+    public class func once(name: String, timeout: NSTimeInterval) -> Promise<[NSObject: AnyObject]> {
+        return NSNotificationCenter.defaultCenter().once(name, timeout:timeout)
+    }
+    
+    public func once(name: String, timeout: NSTimeInterval) -> Promise<[NSObject: AnyObject]> {
+        let (promise, fulfill, reject) = NotificationPromise.go()
+        let id = addObserverForName(name, object: nil, queue: nil, usingBlock: fulfill)
+        after(timeout).then { reject(NSError(code: VVErrorCode.Network.rawValue)) }
+        promise.always(on: zalgo) { _ in self.removeObserver(id) }
+        return promise
     }
 }
