@@ -3,7 +3,7 @@
 	url = https://github.com/PromiseKit/Foundation.git
 [submodule "Extensions/UIKit"]
 	path = Extensions/UIKit
-	url = https://github.com/PromiseKit/UIKit.git
+	url = https://github.com/BLVudu/PromiseKit-UIKit.git
 [submodule "Extensions/Accounts"]
 	path = Extensions/Accounts
 	url = https://github.com/PromiseKit/Accounts.git
